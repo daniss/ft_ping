@@ -12,7 +12,7 @@ SRCS = $(addprefix $(SRCDIR)/, $(SOURCES))
 all: $(NAME)
 
 $(NAME): $(OBJDIR) $(OBJECTS)
-	$(CC) $(OBJECTS) -o $(NAME)
+	$(CC) $(OBJECTS) -o $(NAME) -lm
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@

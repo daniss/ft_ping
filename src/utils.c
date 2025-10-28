@@ -34,6 +34,7 @@ void calculate_stats(double rtt)
     if (rtt > g_ping.stats.max_time)
         g_ping.stats.max_time = rtt;
     g_ping.stats.total_time += rtt;
+    g_ping.stats.sum_squares += rtt * rtt;
     g_ping.stats.avg_time = g_ping.stats.total_time / g_ping.stats.received;
 }
 
@@ -45,11 +46,14 @@ void print_stats(void)
     if (g_ping.stats.transmitted > 0)
         loss_percent = (double)lost / g_ping.stats.transmitted * 100.0;
 
-    printf("%d packets transmitted, %d received, %.0f%% packet loss\n",
+    printf("%d packets transmitted, %d packets received, %.0f%% packet loss\n",
            g_ping.stats.transmitted, g_ping.stats.received, loss_percent);
 
     if (g_ping.stats.received > 0) {
-        printf("round-trip min/avg/max = %.3f/%.3f/%.3f ms\n",
-               g_ping.stats.min_time, g_ping.stats.avg_time, g_ping.stats.max_time);
+        double variance = (g_ping.stats.sum_squares / g_ping.stats.received) - 
+                         (g_ping.stats.avg_time * g_ping.stats.avg_time);
+        double stddev = sqrt(variance > 0 ? variance : 0);
+        printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n",
+               g_ping.stats.min_time, g_ping.stats.avg_time, g_ping.stats.max_time, stddev);
     }
 }

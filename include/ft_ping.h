@@ -17,9 +17,11 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/select.h>
+#include <math.h>
 
-#define PACKET_SIZE 64
+#define DEFAULT_PACKET_SIZE 64
 #define ICMP_HEADER_SIZE 8
+#define MAX_PACKET_SIZE 65535
 
 typedef struct s_ping_stats {
     int transmitted;
@@ -29,6 +31,9 @@ typedef struct s_ping_stats {
     double max_time;
     double total_time;
     double avg_time;
+    double sum_squares;
+    struct timeval start_time;
+    struct timeval end_time;
 } t_ping_stats;
 
 typedef struct s_ping_config {
@@ -36,6 +41,12 @@ typedef struct s_ping_config {
     char target_ip[INET_ADDRSTRLEN];
     int verbose;
     int help;
+    int quiet;
+    int numeric;
+    int count;
+    double interval;
+    int timeout;
+    int packet_size;
     int sockfd;
     struct sockaddr_in dest_addr;
     t_ping_stats stats;
