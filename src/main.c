@@ -50,7 +50,12 @@ int main(int argc, char **argv)
     /* Calculate packet size for display */
     int data_bytes = g_ping.packet_size > 0 ? g_ping.packet_size : (DEFAULT_PACKET_SIZE - ICMP_HEADER_SIZE);
     
-    printf("PING %s (%s): %d data bytes\n", g_ping.target, g_ping.target_ip, data_bytes);
+    if (g_ping.verbose)
+        printf("PING %s (%s): %d data bytes, id 0x%04x = %u\n", 
+               g_ping.target, g_ping.target_ip, data_bytes, 
+               g_ping.pid & 0xFFFF, g_ping.pid & 0xFFFF);
+    else
+        printf("PING %s (%s): %d data bytes\n", g_ping.target, g_ping.target_ip, data_bytes);
 
     while (1)
     {
@@ -81,7 +86,7 @@ int main(int argc, char **argv)
     }
 
     gettimeofday(&g_ping.stats.end_time, NULL);
-    printf("\n--- %s ping statistics ---\n", g_ping.target);
+    printf("--- %s ping statistics ---\n", g_ping.target);
     print_stats();
     close(g_ping.sockfd);
     return (0);

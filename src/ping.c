@@ -19,10 +19,6 @@ int parse_arguments(int argc, char **argv)
             g_ping.help = 1;
             return (0);
         }
-        else if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0)
-            g_ping.quiet = 1;
-        else if (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--numeric") == 0)
-            g_ping.numeric = 1;
         else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--count") == 0)
         {
             if (i + 1 >= argc)
@@ -118,8 +114,6 @@ void print_usage(void)
     printf("Options:\n");
     printf("  -c, --count=NUMBER         stop after sending NUMBER packets\n");
     printf("  -i, --interval=NUMBER      wait NUMBER seconds between sending each packet\n");
-    printf("  -n, --numeric              do not resolve host addresses\n");
-    printf("  -q, --quiet                quiet output\n");
     printf("  -s, --size=NUMBER          send NUMBER data octets\n");
     printf("  -v, --verbose              verbose output\n");
     printf("  -w, --timeout=N            stop after N seconds\n");
@@ -147,7 +141,13 @@ int resolve_hostname(const char *hostname, char *ip)
 
 int create_socket(void)
 {
-    g_ping.sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    struct protoent *proto;
+    
+    proto = getprotobyname("icmp");
+    if (!proto)
+        return 1;
+    
+    g_ping.sockfd = socket(AF_INET, SOCK_RAW, proto->p_proto);
     if (g_ping.sockfd < 0)
         return 1;
 
@@ -195,6 +195,90 @@ int send_ping(void)
     return 0;
 }
 
+static void print_ip_header_hex(unsigned char *ip_data, size_t len)
+{
+    size_t i;
+    
+    printf("IP Hdr Dump:\n ");
+    for (i = 0; i < len && i < 20; i++) {
+        printf("%02x", ip_data[i]);
+        if ((i + 1) % 2 == 0)
+            printf(" ");
+    }
+    printf("\n");
+}
+
+static void print_ip_header_verbose(struct iphdr *ip)
+{
+    struct in_addr src, dst;
+    char src_str[INET_ADDRSTRLEN];
+    char dst_str[INET_ADDRSTRLEN];
+    
+    src.s_addr = ip->saddr;
+    dst.s_addr = ip->daddr;
+    
+    /* Copy strings since inet_ntoa uses static buffer */
+    strncpy(src_str, inet_ntoa(src), INET_ADDRSTRLEN - 1);
+    src_str[INET_ADDRSTRLEN - 1] = '\0';
+    strncpy(dst_str, inet_ntoa(dst), INET_ADDRSTRLEN - 1);
+    dst_str[INET_ADDRSTRLEN - 1] = '\0';
+    
+    printf("Vr HL TOS  Len   ID Flg  off TTL Pro  cks      Src\tDst\tData\n");
+    printf(" %1x  %1x  %02x %04x %04x   %1x %04x  %02x  %02x %04x %s  %s \n",
+           ip->version,
+           ip->ihl,
+           ip->tos,
+           ntohs(ip->tot_len),
+           ntohs(ip->id),
+           (ntohs(ip->frag_off) >> 13) & 0x7,
+           ntohs(ip->frag_off) & 0x1FFF,
+           ip->ttl,
+           ip->protocol,
+           ntohs(ip->check),
+           src_str,
+           dst_str);
+}
+
+static void print_icmp_verbose(struct icmphdr *icmp, size_t icmp_len)
+{
+    printf("ICMP: type %d, code %d, size %zu, id 0x%04x, seq 0x%04x\n",
+           icmp->type, icmp->code, icmp_len,
+           icmp->un.echo.id, icmp->un.echo.sequence);
+}
+
+static void print_icmp_error_verbose(char *buffer, ssize_t bytes, 
+                                     struct sockaddr_in *recv_addr,
+                                     const char *error_msg)
+{
+    struct iphdr *outer_ip = (struct iphdr *)buffer;
+    size_t outer_ip_len = outer_ip->ihl * 4;
+    
+    unsigned char *orig_ip_data = (unsigned char *)(buffer + outer_ip_len + ICMP_HEADER_SIZE);
+    struct iphdr *orig_ip = (struct iphdr *)orig_ip_data;
+    size_t orig_ip_len = orig_ip->ihl * 4;
+    struct icmphdr *orig_icmp = (struct icmphdr *)(orig_ip_data + orig_ip_len);
+    
+    /* Check if this is our packet - ID is stored in host byte order */
+    if (orig_icmp->un.echo.id != (g_ping.pid & 0xFFFF)) {
+        return;
+    }
+    
+    /* Print error header - size excludes outer IP header */
+    printf("%zd bytes from %s: %s\n",
+           bytes - (ssize_t)outer_ip_len, inet_ntoa(recv_addr->sin_addr), error_msg);
+    
+    /* Print original IP header hex dump */
+    print_ip_header_hex(orig_ip_data, orig_ip_len > 20 ? 20 : orig_ip_len);
+    
+    /* Print original IP header parsed */
+    print_ip_header_verbose(orig_ip);
+    
+    /* Print original ICMP info */
+    int orig_icmp_size = g_ping.packet_size > 0 ? 
+                         g_ping.packet_size + ICMP_HEADER_SIZE : DEFAULT_PACKET_SIZE;
+    print_icmp_verbose(orig_icmp, orig_icmp_size);
+}
+
 int receive_ping(void)
 {
     char buffer[1024];
@@ -211,7 +295,7 @@ int receive_ping(void)
     while (!got_reply) {
         FD_ZERO(&read_fds);
         FD_SET(g_ping.sockfd, &read_fds);
-        timeout.tv_sec = 1;
+        timeout.tv_sec = 5;
         timeout.tv_usec = 0;
 
         if (select(g_ping.sockfd + 1, &read_fds, NULL, NULL, &timeout) <= 0) {
@@ -257,29 +341,26 @@ int receive_ping(void)
             memcpy(&tv_sent, buffer + timestamp_offset, sizeof(tv_sent));
             rtt = get_time_diff(tv_sent, tv_recv);
 
-            if (!g_ping.quiet) {
-                printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
-                       bytes - (ssize_t)ip_header_len, g_ping.target_ip,
-                       icmp_hdr->un.echo.sequence, ip_hdr->ttl, rtt);
-            }
+            printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n",
+                   bytes - (ssize_t)ip_header_len, g_ping.target_ip,
+                   icmp_hdr->un.echo.sequence, ip_hdr->ttl, rtt);
 
             g_ping.stats.received++;
             calculate_stats(rtt);
             got_reply = 1;
         } else if (icmp_hdr->type == ICMP_TIME_EXCEEDED) {
             if (g_ping.verbose) {
-                printf("From %s icmp_seq=%d Time to live exceeded\n",
-                       inet_ntoa(recv_addr.sin_addr), g_ping.stats.transmitted);
+                print_icmp_error_verbose(buffer, bytes, &recv_addr, "Time to live exceeded");
             }
             got_reply = 1;
         } else if (icmp_hdr->type == ICMP_DEST_UNREACH) {
             if (g_ping.verbose) {
-                printf("From %s icmp_seq=%d Destination Host Unreachable\n",
-                       inet_ntoa(recv_addr.sin_addr), g_ping.stats.transmitted);
+                print_icmp_error_verbose(buffer, bytes, &recv_addr, "Destination Host Unreachable");
             }
             got_reply = 1;
-        } else if (g_ping.verbose) {
-            printf("Received ICMP packet: type=%d, code=%d\n", icmp_hdr->type, icmp_hdr->code);
+        } else if (icmp_hdr->type == ICMP_ECHO) {
+            /* Ignore our own echo requests (happens on loopback) */
+            continue;
         }
     }
 
@@ -290,7 +371,8 @@ void signal_handler(int sig)
 {
     if (sig == SIGINT) {
         gettimeofday(&g_ping.stats.end_time, NULL);
-        printf("\n--- %s ping statistics ---\n", g_ping.target);
+        printf("\n");
+        printf("--- %s ping statistics ---\n", g_ping.target);
         print_stats();
         close(g_ping.sockfd);
         exit(0);
