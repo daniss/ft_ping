@@ -12,14 +12,14 @@ int parse_arguments(int argc, char **argv)
 
     for (i = 1; i < argc; i++)
     {
-        if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0)
+        if (strcmp(argv[i], "-v") == 0)
             g_ping.verbose = 1;
-        else if (strcmp(argv[i], "-?") == 0 || strcmp(argv[i], "--help") == 0)
+        else if (strcmp(argv[i], "-?") == 0)
         {
             g_ping.help = 1;
             return (0);
         }
-        else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--count") == 0)
+        else if (strcmp(argv[i], "-c") == 0)
         {
             if (i + 1 >= argc)
             {
@@ -33,7 +33,7 @@ int parse_arguments(int argc, char **argv)
                 return (1);
             }
         }
-        else if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--interval") == 0)
+        else if (strcmp(argv[i], "-i") == 0)
         {
             if (i + 1 >= argc)
             {
@@ -47,7 +47,7 @@ int parse_arguments(int argc, char **argv)
                 return (1);
             }
         }
-        else if (strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--timeout") == 0)
+        else if (strcmp(argv[i], "-w") == 0)
         {
             if (i + 1 >= argc)
             {
@@ -61,7 +61,7 @@ int parse_arguments(int argc, char **argv)
                 return (1);
             }
         }
-        else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--size") == 0)
+        else if (strcmp(argv[i], "-s") == 0)
         {
             if (i + 1 >= argc)
             {
@@ -109,15 +109,7 @@ int parse_arguments(int argc, char **argv)
 
 void print_usage(void)
 {
-    printf("Usage: ft_ping [OPTION...] HOST ...\n");
-    printf("Send ICMP ECHO_REQUEST packets to network hosts.\n\n");
-    printf("Options:\n");
-    printf("  -c, --count=NUMBER         stop after sending NUMBER packets\n");
-    printf("  -i, --interval=NUMBER      wait NUMBER seconds between sending each packet\n");
-    printf("  -s, --size=NUMBER          send NUMBER data octets\n");
-    printf("  -v, --verbose              verbose output\n");
-    printf("  -w, --timeout=N            stop after N seconds\n");
-    printf("  -?, --help                 give this help list\n");
+    printf("Usage: ft_ping [-v] [-c count] [-i interval] [-s size] [-w timeout] destination\n");
 }
 
 int resolve_hostname(const char *hostname, char *ip)
