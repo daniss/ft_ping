@@ -9,8 +9,7 @@ int main(int argc, char **argv)
     double interval;
     
     memset(&g_ping, 0, sizeof(g_ping));
-    
-    /* Set default values */
+
     g_ping.interval = 1.0;
     
     if (parse_arguments(argc, argv) != 0)
@@ -41,13 +40,12 @@ int main(int argc, char **argv)
     }
 
     g_ping.pid = getpid();
-    g_ping.stats.min_time = 999999.0; /* initialize to high value */
+    g_ping.stats.min_time = 999999.0;
 
     signal(SIGINT, signal_handler);
 
     gettimeofday(&g_ping.stats.start_time, NULL);
 
-    /* Calculate packet size for display */
     int data_bytes = g_ping.packet_size > 0 ? g_ping.packet_size : (DEFAULT_PACKET_SIZE - ICMP_HEADER_SIZE);
     
     if (g_ping.verbose)
@@ -59,7 +57,6 @@ int main(int argc, char **argv)
 
     while (1)
     {
-        /* Check timeout */
         if (g_ping.timeout > 0) {
             gettimeofday(&current_time, NULL);
             elapsed = get_time_diff(g_ping.stats.start_time, current_time) / 1000.0;
@@ -68,7 +65,6 @@ int main(int argc, char **argv)
             }
         }
         
-        /* Check count */
         if (g_ping.count > 0 && g_ping.stats.transmitted >= g_ping.count) {
             break;
         }
@@ -78,7 +74,6 @@ int main(int argc, char **argv)
         if (receive_ping() != 0)
             break;
             
-        /* Wait interval before next ping */
         interval = g_ping.interval > 0 ? g_ping.interval : 1.0;
         if (g_ping.count > 0 && g_ping.stats.transmitted >= g_ping.count)
             break;

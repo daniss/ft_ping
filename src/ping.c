@@ -258,22 +258,17 @@ static void print_icmp_error_verbose(char *buffer, ssize_t bytes,
     size_t orig_ip_len = orig_ip->ihl * 4;
     struct icmphdr *orig_icmp = (struct icmphdr *)(orig_ip_data + orig_ip_len);
     
-    /* Check if this is our packet - ID is stored in host byte order */
     if (orig_icmp->un.echo.id != (g_ping.pid & 0xFFFF)) {
         return;
     }
     
-    /* Print error header - size excludes outer IP header */
     printf("%zd bytes from %s: %s\n",
            bytes - (ssize_t)outer_ip_len, inet_ntoa(recv_addr->sin_addr), error_msg);
     
-    /* Print original IP header hex dump */
     print_ip_header_hex(orig_ip_data, orig_ip_len > 20 ? 20 : orig_ip_len);
     
-    /* Print original IP header parsed */
     print_ip_header_verbose(orig_ip);
     
-    /* Print original ICMP info */
     int orig_icmp_size = g_ping.packet_size > 0 ? 
                          g_ping.packet_size + ICMP_HEADER_SIZE : DEFAULT_PACKET_SIZE;
     print_icmp_verbose(orig_icmp, orig_icmp_size);
@@ -359,7 +354,6 @@ int receive_ping(void)
             }
             got_reply = 1;
         } else if (icmp_hdr->type == ICMP_ECHO) {
-            /* Ignore our own echo requests (happens on loopback) */
             continue;
         }
     }
